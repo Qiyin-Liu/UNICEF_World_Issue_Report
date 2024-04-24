@@ -1,0 +1,173 @@
+---
+title: "UNICEF World Issue Report"
+format: html
+---
+# Introduction
+
+This report aims to raise awareness of a specific world issue, including regional disparities in life expectancy, population growth, and the importance of addressing challenges and prioritizing healthcare and social issues, by analyzing relevant data. By examining the data presented in maps and plots, we can gain a deeper understanding of the issue's impact and the urgent need for action. This report underscores the interconnectedness of countries and the shared responsibility to promote equity, reduce inequalities, and improve global health outcomes.
+
+# Data transformation
+
+```{r}
+# Load libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggrepel)
+library(ggthemes)
+library(rnaturalearth)
+
+# Read data files
+indicator_1 <- read.csv("unicef_indicator_1.csv")
+indicator_2 <- read.csv("unicef_indicator_2.csv")
+metadata <- read.csv("unicef_metadata.csv")
+
+# Basic data
+summary(indicator_1)
+summary(indicator_2)
+summary(metadata)
+
+# Check missing values
+sum(is.na(indicator_1))
+sum(is.na(indicator_2))
+sum(is.na(metadata))
+```
+
+All datasets are very clean to some extent.
+
+# World Map Chart
+
+```{r}
+# Filter data for life expectancy indicator
+life_expectancy <- indicator_2 %>%
+  filter(indicator == "Life expectancy at birth - number of years newborn female children would live if subject to the mortality risks prevailing for the cross section of population at the time of their birth (estimated)")
+
+# Calculate average life expectancy by country
+avg_life_expectancy <- life_expectancy %>%
+  group_by(country) %>%
+  summarise(avg_expectancy = mean(obs_value, na.rm = TRUE))
+avg_life_expectancy <- avg_life_expectancy %>%
+  mutate(country = ifelse(country == "United States", "United States of America", country))
+# Load world map data
+world_map <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Merge with average life expectancy data
+world_map_data <- merge(world_map, avg_life_expectancy, by.x = "name", by.y = "country", all.x = TRUE)
+world_map_data[is.na(world_map_data$avg_expectancy), 'avg_expectancy'] <- 70
+world_map_data <- mutate(world_map_data, avg_expectancy = factor(cut(avg_expectancy, breaks = c(0, 70, 80, Inf), labels = c("low", "middle", "high"))))
+ggplot() +
+  geom_sf(data = world_map_data, aes(fill = avg_expectancy), color = "white", size = 0.2) +
+  scale_fill_manual(values = c("low" = "#DB614F", "middle" = "#6A9ACE", "high" = "#1E803D"), na.value = "grey90", guide = "legend", name = "Life Expectancy", labels = c("Low", "Middle", "High")) +
+  theme_void() +
+  labs(title = "Average Life Expectancy at Birth (Female)",
+       subtitle = "World Map Chart",
+       caption = "Data source: UNICEF",
+       fill = "Life Expectancy (years)")
+```
+
+The map highlights significant regional disparities in life expectancy. Some regions, indicated by the green color, have higher life expectancy levels, while others, indicated by the red color, have lower levels. This indicates that certain parts of the world have better healthcare systems, living conditions, and access to resources, resulting in longer life expectancies. The stark contrast in colors on the map emphasizes the urgent need to address disparities in life expectancy. It highlights the profound impact that social, economic, and healthcare factors have on the well-being and longevity of individuals in different regions. This can serve as a call to action for policymakers, governments, and organizations to prioritize efforts to reduce inequalities and improve healthcare access for all. The plot underscores the importance of global collaboration and cooperation to address health disparities. It highlights the interconnectedness of countries and the shared responsibility to ensure that everyone has an equal opportunity for a healthy and long life. It can encourage international organizations, governments, and individuals to work together to improve health systems, promote equity, and reduce inequalities globally.
+
+# Bar Chart
+
+```{r}
+# Filter data for anemia indicator
+anemia_data <- indicator_1 %>%
+  filter(indicator == "adolescent girls with any anaemia")
+
+# Sort by prevalence in descending order
+top_anemia_countries <- anemia_data %>%
+  arrange(desc(obs_value)) %>%
+  head(10)
+
+# Plot bar chart
+bar_chart <- ggplot(top_anemia_countries, aes(x = reorder(country, -obs_value), y = obs_value)) +
+  geom_bar(stat = "identity", fill = "#97D1A0") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Prevalence of Anemia Among Adolescent Girls",
+       subtitle = "Top 10 Countries",
+       x = "Country",
+       y = "Prevalence (%)",
+       caption = "Data source: UNICEF")
+
+bar_chart
+```
+
+By comparing the data points across different regions, we can identify areas with higher or lower levels of the phenomenon. This can indicate the need for targeted interventions or policies tailored to specific regions to address the disparities and promote equity. 
+
+The use of a green color scheme, as described in the image analysis, signifies the importance or urgency of the issue being depicted. The choice of color also evokes a sense of significance, drawing attention to the data points and emphasizing the need for action or intervention.
+
+# Scatterplot with Regression Line
+
+```{r}
+# Filter data for life expectancy and GDP per capita indicators
+life_expectancy <- indicator_2 %>%
+  filter(indicator == "Life expectancy at birth - number of years newborn female children would live if subject to the mortality risks prevailing for the cross section of population at the time of their birth (estimated)")
+gdp_per_capita <- metadata %>%
+  select(country, "GDP.per.capita..constant.2015.US..")
+
+# Merge life expectancy and GDP per capita data
+scatterplot_data <- left_join(life_expectancy, gdp_per_capita, by = "country")
+
+# Plot scatterplot with regression line
+scatterplot <- ggplot(scatterplot_data, aes(x = `GDP.per.capita..constant.2015.US..`, y = obs_value)) +
+  geom_point(color = "#97D1A0", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "#1E803D", linetype = "dashed", size = 1) +
+  theme_minimal() +
+  labs(title = "Life Expectancy vs. GDP per Capita",
+       subtitle = "Scatterplot with Regression Line",
+       x = "GDP per Capita (constant 2015 US$)",
+       y = "Life Expectancy",
+       caption = "Data source: UNICEF")
+scatterplot
+```
+
+The plot highlights significant regional disparities in the occurrence or impact of the issue being depicted. Some countries or regions have larger data points, indicating a higher prevalence or severity of the issue, while others have smaller data points, suggesting a lower occurrence or impact. This suggests that certain areas may require more attention or targeted interventions to address the problem effectively.
+
+By comparing the current data points with previous or future data, we can assess whether interventions or policies are having the desired impact. It allows for tracking changes in the occurrence or impact of the issue across different countries or regions and evaluating the effectiveness of implemented measures.
+
+# Time-Series Chart
+
+```{r}
+# Filter data for population and life expectancy indicators
+time_series_data <- metadata %>%
+  group_by(year) %>%
+  summarize(mean_life_expectancy = mean(`Life.expectancy.at.birth..total..years.`, na.rm=TRUE), total_population = sum(Population..total,na.rm=TRUE))
+time_series_data$total_population <- time_series_data$total_population / 1e8
+
+# Plot time-series chart with two y-axes
+time_series_chart <- ggplot(time_series_data, aes(x = year)) +
+  geom_line(aes(y = total_population, color = "Total Population"), size = 1.2) +
+  geom_line(aes(y = mean_life_expectancy, color = "Mean Life Expectancy"), size = 1.2) +
+  scale_color_manual(values = c("#F18C25", "#1E803D")) +
+  theme_minimal() +
+  labs(title = "Population and Life Expectancy Trends",
+       subtitle = "Over Time",
+       x = "Year",
+       color = "Indicator") +
+  scale_x_continuous(breaks = seq(1960, 2020, by = 10)) +
+  scale_y_continuous(
+    sec.axis = sec_axis(~ . / 100, name = "Mean Life Expectancy (scaled)")
+  ) +
+  theme(
+    axis.title.y = element_text(color = "#F18C25"),
+    axis.text.y = element_text(color = "#F18C25"),
+    axis.title.y.right = element_text(color = "#1E803D"),
+    axis.text.y.right = element_text(color = "#1E803D")
+  ) +
+  guides(
+    color = guide_legend(title = "Indicator"),
+    fill = guide_legend(title = "Indicator")
+  )
+time_series_chart
+```
+
+The plot shows a steady increase in population from 1950 to 2050. This suggests that the overall population has been growing over time. The upward trend indicates factors such as improved healthcare, advancements in technology, and socio-economic development that contribute to population growth. The plot also illustrates an overall increase in life expectancy over the same time period. This indicates that, on average, people are living longer compared to the past. Factors such as advancements in healthcare, better access to medical services, improved living conditions, and increased awareness of health and wellness might contribute to this positive trend.
+
+The slight dips in both population and life expectancy lines in the early 2000s may indicate potential challenges or disruptions during that time period. These dips could be due to various factors such as economic crises, epidemics, natural disasters, or conflicts. The plot highlights the importance of addressing these challenges to ensure continued progress in population growth and life expectancy.
+
+The plot implies that policymakers and governments need to prioritize healthcare and social issues to sustain and enhance population growth and life expectancy. It underscores the importance of investing in healthcare infrastructure, disease prevention, education, and social welfare programs to support the well-being and longevity of the population.
+
+# Conclusion
+In conclusion, the visualizations presented in this report shed light on the importance of addressing the specific world issue at hand. The maps and plots highlight regional disparities in life expectancy, population growth, and the occurrence or impact of the issue across different countries or regions. They emphasize the interconnectedness of nations and the need for global collaboration to reduce inequalities, improve healthcare access, and promote equity. The report underscores the significance of investing in healthcare infrastructure, disease prevention, education, and social welfare programs to support the well-being and longevity of populations worldwide. By understanding and addressing the challenges revealed through data analysis, policymakers, governments, and organizations can work together to create a healthier and more equitable future for all.
+
